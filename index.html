@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindMapGPT - Dynamic Knowledge Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        
+        .description {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 12px;
+            border: 1px solid #dfe6e9;
+            border-radius: 8px;
+            background-color: #f7f8fa;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            resize: vertical;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #556080;
+            box-shadow: 0 0 0 3px rgba(85, 96, 128, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-primary {
+            background-color: #556080;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #434c67;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-secondary {
+            background-color: #e9ecef;
+            color: #556080;
+            font-weight: 500;
+        }
+
+        .btn-secondary:hover {
+            background-color: #dae0e5;
+            transform: translateY(-2px);
+        }
+
+        .loader {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #556080;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .main-content {
+            flex-grow: 1;
+            position: relative;
+            background-color: #ffffff;
+            border-radius: 12px;
+            margin: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        #mindmap-container {
+            width: 100%;
+            height: 100%;
+        }
+        
+        svg {
+            display: block;
+        }
+
+        .node text {
+            fill: #333;
+            text-anchor: middle;
+            font-size: 12px;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        .link {
+            stroke: #95a5a6;
+            stroke-width: 2px;
+            stroke-opacity: 0.6;
+        }
+
+        .node circle {
+            stroke: #fff;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+
+        .node circle:hover {
+            stroke-width: 3px;
+            filter: brightness(110%);
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 20;
+        }
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .overlay p {
+            color: #556080;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .export-section {
+            margin-top: 24px;
+        }
+        .export-section h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #555;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h1>MindMapGPT</h1>
+                <p class="description">Dynamic Knowledge Visualization</p>
+            </div>
+            
+            <div class="input-group">
+                <label for="text-input">Enter your notes, research, or text below:</label>
+                <textarea id="text-input" placeholder="e.g., Artificial intelligence and machine learning are transforming the technology industry..."></textarea>
+            </div>
+
+            <div class="loader" id="loader"></div>
+            
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="generateMindMap()">Generate Mind Map</button>
+            </div>
+
+            <div class="export-section">
+                <h3>Export Options</h3>
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="copySVG()">Copy as SVG</button>
+                    <button class="btn btn-secondary" onclick="exportPNG()">Export as PNG</button>
+                    <button class="btn btn-secondary" onclick="exportJSON()">Export as JSON</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div id="mindmap-container"></div>
+            <div class="overlay" id="overlay">
+                <p>Click "Generate Mind Map" to begin.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set up global variables
+        let width, height;
+        let svg, simulation;
+        let nodes, links;
+        
+        // --- Core Functions ---
+        
+        /**
+         * Initializes the D3.js visualization environment.
+         */
+        function initVisualization() {
+            const container = document.getElementById('mindmap-container');
+            width = container.clientWidth;
+            height = container.clientHeight;
+
+            // Clear previous SVG
+            d3.select("svg").remove();
+
+            // Create SVG element
+            svg = d3.select("#mindmap-container")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            // Create simulation
+            simulation = d3.forceSimulation()
+                .force("link", d3.forceLink().id(d => d.id).distance(d => d.weight * 100 + 50))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2));
+        }
+
+        /**
+         * Fetches data from a placeholder API and updates the visualization.
+         */
+        async function generateMindMap() {
+            const textInput = document.getElementById('text-input');
+            const loader = document.getElementById('loader');
+            const overlay = document.getElementById('overlay');
+            const mindmapContainer = document.getElementById('mindmap-container');
+            
+            const text = textInput.value.trim();
+
+            if (!text) {
+                overlay.querySelector('p').textContent = 'Please enter some text to generate a mind map.';
+                overlay.classList.add('active');
+                return;
+            }
+
+            // Show loading state
+            loader.style.display = 'block';
+            overlay.classList.add('active');
+            overlay.querySelector('p').textContent = 'Generating mind map...';
+            mindmapContainer.style.opacity = '0.5';
+
+            try {
+                // --- Placeholder API Call ---
+                // In a real application, you would send the 'text' to your backend here.
+                // Replace this URL with the endpoint for your Python script.
+                const apiUrl = 'https://example.com/api/generate_mindmap'; 
+                
+                // For this example, we'll use a hardcoded JSON string to simulate the response
+                // that your Python script from the previous steps would return.
+                const sampleResponse = {
+                    "nodes": [
+                        {"id": "node_0", "text": "Artificial Intelligence", "category": "technology", "importance_score": 0.046, "size": 25, "color": "#4A90E2"},
+                        {"id": "node_1", "text": "Machine Learning", "category": "technology", "importance_score": 0.046, "size": 25, "color": "#4A90E2"},
+                        {"id": "node_2", "text": "Data Science", "category": "science", "importance_score": 0.046, "size": 25, "color": "#7ED321"},
+                        {"id": "node_3", "text": "Algorithm Development", "category": "technology", "importance_score": 0.046, "size": 25, "color": "#4A90E2"},
+                        {"id": "node_4", "text": "Software Engineering", "category": "technology", "importance_score": 0.046, "size": 25, "color": "#4A90E2"},
+                        {"id": "node_5", "text": "User Experience", "category": "business", "importance_score": 0.046, "size": 25, "color": "#F5A623"},
+                        {"id": "node_6", "text": "Product Development", "category": "business", "importance_score": 0.046, "size": 25, "color": "#F5A623"},
+                        {"id": "node_7", "text": "Market Analysis", "category": "business", "importance_score": 0.046, "size": 25, "color": "#F5A623"},
+                        {"id": "node_8", "text": "Business Sectors", "category": "business", "importance_score": 0.023, "size": 20, "color": "#F5A623"},
+                        {"id": "node_9", "text": "Customer Feedback", "category": "people", "importance_score": 0.023, "size": 20, "color": "#D0021B"}
+                    ],
+                    "edges": [
+                        {"source": "node_0", "target": "node_1", "weight": 0.8},
+                        {"source": "node_0", "target": "node_2", "weight": 0.7},
+                        {"source": "node_1", "target": "node_2", "weight": 0.6},
+                        {"source": "node_2", "target": "node_3", "weight": 0.5},
+                        {"source": "node_4", "target": "node_5", "weight": 0.4},
+                        {"source": "node_5", "target": "node_6", "weight": 0.9},
+                        {"source": "node_6", "target": "node_7", "weight": 0.6},
+                        {"source": "node_7", "target": "node_8", "weight": 0.4},
+                        {"source": "node_9", "target": "node_5", "weight": 0.8},
+                        {"source": "node_0", "target": "node_7", "weight": 0.3},
+                        {"source": "node_1", "target": "node_6", "weight": 0.5}
+                    ]
+                };
+                
+                // In a real app, you would have:
+                // const response = await fetch(apiUrl, {
+                //     method: 'POST',
+                //     headers: {'Content-Type': 'application/json'},
+                //     body: JSON.stringify({ text: text })
+                // });
+                // const jsonData = await response.json();
+                
+                // For this example, we just use the sample data directly
+                const jsonData = sampleResponse;
+
+                if (jsonData) {
+                    processData(jsonData);
+                    overlay.classList.remove('active');
+                } else {
+                    overlay.querySelector('p').textContent = 'Error: Could not generate mind map.';
+                }
+            } catch (error) {
+                console.error('Error generating mind map:', error);
+                overlay.querySelector('p').textContent = 'Error generating mind map. Please try again.';
+            } finally {
+                loader.style.display = 'none';
+                mindmapContainer.style.opacity = '1';
+            }
+        }
+
+        /**
+         * Renders the mind map using D3.js with the provided data.
+         * @param {object} jsonData - The mind map data containing nodes and edges.
+         */
+        function processData(jsonData) {
+            initVisualization();
+            
+            // Set up nodes and links from JSON data
+            nodes = jsonData.nodes;
+            links = jsonData.edges;
+
+            // Restart simulation
+            simulation.nodes(nodes);
+            simulation.force("link").links(links);
+            simulation.alpha(1).restart();
+
+            // Bind links and nodes to SVG
+            const link = svg.selectAll(".link")
+                .data(links)
+                .join("line")
+                .attr("class", "link")
+                .attr("stroke-width", d => Math.sqrt(d.weight * 10));
+
+            const node = svg.selectAll(".node")
+                .data(nodes)
+                .join("g")
+                .attr("class", "node")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+            
+            // Add circles and text to nodes
+            node.append("circle")
+                .attr("r", d => d.size)
+                .attr("fill", d => d.color)
+                .style("cursor", "pointer");
+
+            node.append("text")
+                .attr("dy", "0.31em")
+                .text(d => d.text)
+                .style("font-size", d => Math.max(8, d.size * 0.7) + "px");
+
+            // Update positions on each simulation tick
+            simulation.on("tick", () => {
+                link.attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                node.attr("transform", d => `translate(${d.x},${d.y})`);
+            });
+        }
+        
+        // --- Dragging functions for user interaction ---
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        // --- Export Functions ---
+        
+        /**
+         * Exports the mind map as a JSON file.
+         */
+        function exportJSON() {
+            const overlay = document.getElementById('overlay');
+            if (!nodes) {
+                overlay.querySelector('p').textContent = 'Please generate a mind map first!';
+                overlay.classList.add('active');
+                return;
+            }
+            const data = { nodes, edges: links };
+            const jsonString = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'mindmap.json';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        /**
+         * Copies the current SVG visualization to the clipboard.
+         */
+        function copySVG() {
+            const overlay = document.getElementById('overlay');
+            if (!svg || !svg.node()) {
+                overlay.querySelector('p').textContent = 'Please generate a mind map first!';
+                overlay.classList.add('active');
+                return;
+            }
+            const svgData = new XMLSerializer().serializeToString(svg.node());
+            // Use a temporary textarea to copy to clipboard
+            const el = document.createElement('textarea');
+            el.value = svgData;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            overlay.querySelector('p').textContent = 'SVG copied to clipboard!';
+            overlay.classList.add('active');
+            setTimeout(() => {
+                overlay.classList.remove('active');
+            }, 3000);
+        }
+
+        /**
+         * Exports the mind map as a PNG image.
+         */
+        function exportPNG() {
+            const overlay = document.getElementById('overlay');
+            if (!svg || !svg.node()) {
+                overlay.querySelector('p').textContent = 'Please generate a mind map first!';
+                overlay.classList.add('active');
+                return;
+            }
+            const svgString = new XMLSerializer().serializeToString(svg.node());
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const img = new Image();
+
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                context.drawImage(img, 0, 0);
+                const pngUrl = canvas.toDataURL('image/png');
+                const a = document.createElement('a');
+                a.href = pngUrl;
+                a.download = 'mindmap.png';
+                a.click();
+                URL.revokeObjectURL(pngUrl);
+            };
+
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            img.src = url;
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initVisualization();
+            generateMindMap();
+        });
+
+        // Resize handler to make visualization responsive
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('mindmap-container');
+            width = container.clientWidth;
+            height = container.clientHeight;
+            
+            d3.select("svg").attr('width', width).attr('height', height);
+            if (simulation) {
+                simulation.force('center', d3.forceCenter(width / 2, height / 2));
+                simulation.alpha(0.3).restart();
+            }
+        });
+        
+    </script>
+</body>
+</html>
